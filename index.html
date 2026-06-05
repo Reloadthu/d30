@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hệ Thống Chia Sẻ Học Liệu Trực Tuyến</title>
+  <!-- Google Fonts & Supabase CDN -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --bg2: #ffffff;
+      --primary: #1e3a8a;
+      --primary-hover: #172554;
+      --accent: #d97706;
+      --success: #16a34a;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; min-height: 100vh; }
+    
+    /* Giao diện Đăng ký / Đăng nhập */
+    .auth-container { background: var(--bg2); padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); width: 100%; max-width: 400px; margin: auto; }
+    .auth-tabs { display: flex; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
+    .auth-tab { flex: 1; text-align: center; padding: 10px; cursor: pointer; font-weight: 600; color: var(--text-muted); }
+    .auth-tab.active { color: var(--primary); border-bottom: 2px solid var(--primary); margin-bottom: -2px; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 6px; font-size: 0.9rem; font-weight: 500; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; outline: none; }
+    .form-group input:focus, .form-group select:focus { border-color: var(--primary); }
+    .btn-primary { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 1rem; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    
+    /* Giao diện Ứng dụng chính */
+    #app { display: none; width: 100%; max-width: 1200px; background: var(--bg2); border-radius: 16px; box-shadow: 0 4px 25px rgba(0,0,0,0.05); overflow: hidden; }
+    #app.visible { display: flex; flex-direction: column; }
+    
+    /* Header & Navigation */
+    header { background: var(--primary); color: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; }
+    .user-info { display: flex; align-items: center; gap: 12px; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; }
+    nav { display: flex; background: #111827; padding: 0 20px; }
+    .nav-item { color: #9ca3af; padding: 15px 20px; text-decoration: none; font-weight: 500; cursor: pointer; }
+    .nav-item:hover, .nav-item.active { color: white; background: #1f2937; }
+    
+    /* Nội dung các Tab */
+    .tab-panel { padding: 30px; display: none; }
+    
+    /* Thống kê nhanh */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+    .stat-card { background: var(--bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border); text-align: center; }
+    .stat-card h3 { font-size: 2rem; color: var(--primary); margin-bottom: 5px; }
+    
+    /* Bộ lọc và Grid nội dung */
+    .filter-bar { display: flex; gap: 10px; margin-bottom: 20px; }
+    .filter-btn { padding: 8px 16px; border: 1px solid var(--border); background: white; border-radius: 20px; cursor: pointer; font-weight: 500; }
+    .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+    .content-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
+    
+    /* Thẻ học liệu (Card) */
+    .content-card { background: white; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.2s; }
+    .content-card:hover { transform: translateY(-4px); }
+    .card-media { height: 160px; background: #e2e8f0; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .card-media img, .card-media video { width: 100%; height: 100%; object-fit: cover; }
+    .media-placeholder { font-size: 3rem; }
+    .card-type-badge { position: absolute; top: 10px; left: 10px; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; color: white; }
+    .badge-video { background: #ef4444; } .badge-image { background: #3b82f6; } .badge-article { background: #10b981; }
+    .card-body { padding: 15px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+    .card-title { font-weight: 600; font-size: 1.1rem; margin-bottom: 8px; }
+    .card-desc { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4; }
+    .card-meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 10px; }
+    .card-actions { display: flex; gap: 5px; }
+    .btn-sm { padding: 4px 8px; border: none; border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-weight: 500; }
+    .btn-view { background: #e0f2fe; color: #0369a1; }
+    .btn-download { background: #dcfce7; color: #15803d; }
+    .btn-del { background: #fee2e2; color: #b91c1c; }
+    
+    /* Giao diện Upload khu vực chọn file */
+    .upload-box { border: 2px dashed var(--border); padding: 30px; text-align: center; border-radius: 8px; cursor: pointer; background: var(--bg); }
+    .upload-box:hover { border-color: var(--primary); }
+    
+    /* Bảng người dùng */
+    .table-container { width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { background: var(--bg); padding: 12px 14px; font-weight: 600; border-bottom: 2px solid var(--border); }
+    
+    /* Cửa sổ Popup (Modal) & Toast Thông báo */
+    .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; opacity:0; pointer-events:none; transition:0.2s; z-index: 1000; }
+    .modal-overlay.open { opacity:1; pointer-events:auto; }
+    .modal-content { background: white; padding: 25px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative; }
+    .modal-content img { width:100%; border-radius:8px; max-height:350px; object-fit:contain; background:#f1f5f9; }
+    .close-modal { position: absolute; top: 15px; right: 15px; font-size: 1.5rem; cursor: pointer; border: none; background: none; }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #334155; color: white; padding: 12px 24px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none; z-index: 2000; font-weight: 500; }
+    .toast.show { display: block; animation: slideIn 0.3s; }
+    .toast.error { background: #ef4444; } .toast.success { background: #10b981; }
+    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <!-- ================= MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ ================= -->
+  <div id="auth-screen" class="auth-container">
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchTab('login')">Đăng nhập</div>
+      <div class="auth-tab" onclick="switchTab('register')">Đăng ký mới</div>
+    </div>
+    
+    <!-- Form Đăng nhập -->
+    <div id="tab-login">
+      <div class="form-group">
+        <label>Tên đăng nhập</label>
+        <input type="text" id="login-user" placeholder="Nhập tên tài khoản...">
+      </div>
+      <div class="form-group">
+        <label>Mật khẩu</label>
+        <input type="password" id="login-pass" placeholder="Nhập mật khẩu...">
+      </div>
+      <button class="btn-primary" onclick="doLogin()">Truy cập hệ thống</button>
+    </div>
+
+    <!-- Form Đăng ký -->
+    <div id="tab-register" style="display: none;">
+      <div class="form-group">
+        <label>Họ và tên</label>
+        <input type="text" id="reg-name" placeholder="Ví dụ: Nguyễn Văn A">
+      </div>
+      <div class="form-group">
+        <label>Tên đăng nhập</label>
+        <input type="text" id="reg-user" placeholder="Viết liền không dấu...">
+      </div>
+      <div class="form-group">
+        <label>Mật khẩu</label>
+        <input type="password" id="reg-pass" placeholder="Tạo mật khẩu an toàn...">
+      </div>
+      <div class="form-group">
+        <label>Vai trò hệ thống</label>
+        <select id="reg-role">
+          <option value="student">Học viên / Sinh viên</option>
+          <option value="admin">Quản trị viên (Giảng viên)</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="doRegister()">Tạo tài khoản</button>
+    </div>
+  </div>
+
+  <!-- ================= GIAO DIỆN CHÍNH ỨNG DỤNG ================= -->
+  <div id="app">
+    <header>
+      <div>
+        <h2 id="welcome-name">Xin chào! 👋</h2>
+        <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 4px;">Hệ thống quản lý và chia sẻ học liệu trực tuyến đám mây</p>
+      </div>
+      <div class="user-info">
+        <div style="text-align: right;">
+          <div id="header-username" style="font-weight:600;">User</div>
+          <div id="header-role" style="font-size:0.75rem; opacity:0.8;">Vai trò</div>
+        </div>
+        <div id="user-avatar-badge" class="avatar">U</div>
+        <button class="btn-sm btn-del" onclick="doLogout()" style="padding:8px 12px;">Đăng xuất</button>
+      </div>
+    </header>
+
+    <nav>
+      <div class="nav-item active" onclick="setTab('home')">🏠 Trang chủ</div>
+      <div class="nav-item" onclick="setTab('content')">📚 Kho học liệu</div>
+      <div class="nav-item" id="nav-admin" style="display:none;" onclick="setTab('admin')">🛠️ Đăng bài học</div>
+      <div class="nav-item" id="nav-manage-users" style="display:none;" onclick="setTab('users')">👥 Quản lý tài khoản</div>
+    </nav>
+
+    <!-- Tab 1: Trang chủ tổng quan -->
+    <div id="tab-content-home" class="tab-panel" style="display: block;">
+      <div class="stats-grid">
+        <div class="stat-card"><h3><span id="stat-posts">0</span></h3><p>Tổng học liệu cloud</p></div>
+        <div class="stat-card"><h3><span id="stat-videos">0</span></h3><p>Video bài giảng</p></div>
+        <div class="stat-card"><h3><span id="stat-images">0</span></h3><p>Hình ảnh / Sơ đồ</p></div>
+        <div class="stat-card"><h3><span id="stat-online">5</span></h3><p>Đang trực tuyến</p></div>
+      </div>
+      <h3 style="margin-bottom: 15px; border-left: 4px solid var(--primary); padding-left: 10px;">Học liệu mới cập nhật</h3>
+      <div id="home-feed" class="content-grid"></div>
+    </div>
+
+    <!-- Tab 2: Toàn bộ học liệu công khai -->
+    <div id="tab-content-content" class="tab-panel">
+      <div class="filter-bar">
+        <button class="filter-btn active" onclick="filterContent('all', this)">Tất cả</button>
+        <button class="filter-btn" onclick="filterContent('video', this)">🎬 Video</button>
+        <button class="filter-btn" onclick="filterContent('image', this)"> Anhr/Sơ đồ</button>
+        <button class="filter-btn" onclick="filterContent('article', this)">📄 Bài viết</button>
+      </div>
+      <div id="all-content-grid" class="content-grid"></div>
+    </div>
+
+    <!-- Tab 3: Khu vực của Admin (Đăng bài và quản lý bài) -->
+    <div id="tab-content-admin" class="tab-panel">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start;">
+        <!-- Form đăng bài -->
+        <div style="background: var(--bg); padding: 25px; border-radius: 10px; border: 1px solid var(--border);">
+          <h3 style="margin-bottom: 15px;">Tải lên học liệu mới lên Cloud</h3>
+          <div class="form-group">
+            <label>Tiêu đề học liệu</label>
+            <input type="text" id="post-title" placeholder="Nhập tên bài học, tư liệu...">
+          </div>
+          <div class="form-group">
+            <label>Mô tả tóm tắt nội dung</label>
+            <textarea id="post-desc" rows="3" placeholder="Nhập thông tin hướng dẫn học tập sơ lược..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Hình thức định dạng bài học</label>
+            <select id="post-type" onchange="toggleUploadUI()">
+              <option value="article">📄 Chỉ viết văn bản hướng dẫn</option>
+              <option value="image">🖼️ Đính kèm hình ảnh minh họa</option>
+              <option value="video">🎬 Đính kèm video bài giảng</option>
+            </select>
+          </div>
+          <!-- Ô chọn tệp tin -->
+          <div class="form-group" id="upload-area" style="display: none;">
+            <label>Chọn tệp đính kèm (Giới hạn tối đa 50MB)</label>
+            <div class="upload-box" onclick="document.getElementById('file-input').click()">
+              <div id="upload-icon" style="font-size: 2rem; margin-bottom: 5px;">📁</div>
+              <p id="upload-label">Nhấn vào đây để chọn file từ thiết bị</p>
+              <input type="file" id="file-input" style="display: none;" onchange="handleFileSelect(event)">
+            </div>
+            <img id="img-preview" src="#" alt="Xem trước ảnh" style="display:none; width:100%; margin-top:10px; border-radius:6px; max-height:150px; object-fit:cover;">
+          </div>
+          <button class="btn-primary" style="background:var(--success)" onclick="submitPost()">🚀 Phát hành toàn hệ thống</button>
+        </div>
+        <!-- Danh sách bài đăng của admin để xóa -->
+        <div>
+          <h3 style="margin-bottom: 15px;">Bài học bạn đã đăng tải</h3>
+          <div id="admin-posts-grid" class="content-grid" style="grid-template-columns: 1fr;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 4: Quản lý danh sách tài khoản học viên -->
+    <div id="tab-content-users" class="tab-panel">
+      <h3 style="margin-bottom: 15px;">Danh sách tài khoản đồng bộ cơ sở dữ liệu</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Tên tài khoản</th>
+              <th>Họ và tên hiển thị</th>
+              <th>Cấp quyền hệ thống</th>
+              <th>Hành động</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CỬA SỔ POPUP XEM CHI TIẾT BÀI HỌC ================= -->
+  <div id="modal-overlay" class="modal-overlay" onclick="closeModalOutside(event)">
+    <div class="modal-content">
+      <button class="close-modal" onclick="closeModal()">×</button>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Thông báo Toast nhanh -->
+  <div id="toast" class="toast"></div>
+
+  <!-- ================= TOÀN BỘ LOGIC JAVASCRIPT KẾT NỐI SUPABASE ================= -->
+  <script>
+    // ===== CẤU HÌNH LIÊN KẾT ĐẾN DỰ ÁN SUPABASE CỦA BẠN =====
+    const SUPABASE_URL = 'https://YOUR_SUPABASE_URL.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ===== DATA STORE cục bộ trên RAM trình duyệt =====
+    let users = [];
+    let posts = [];
+    let currentUser = null;
+    let currentFilter = 'all';
+
+    // Tự động tải dữ liệu khi vừa mở trang web
+    document.addEventListener('DOMContentLoaded', () => {
+      loadData();
+    });
+
+    // ===== 1. TẢI DỮ LIỆU ĐỒNG BỘ TỪ CLOUD =====
+    async function loadData() {
+      try {
+        let { data: supabasePosts, error } = await supabaseClient
+          .from('posts')
+          .select('*')
+          .order('id', { ascending: false });
+          
+        if (error) throw error;
+        
+        posts = supabasePosts || [];
+        updateStats();
+        renderFeed();
+        renderContentGrid(currentFilter);
+        if (currentUser?.role === 'admin') renderAdminPosts();
+      } catch(e) {
+        showToast('❌ Không thể đồng bộ dữ liệu từ đám mây Supabase!', 'error');
+      }
+    }
+
+    // ===== 2. QUẢN LÝ XÁC THỰC TÀI KHOẢN =====
+    function switchTab(t) {
+      document.getElementById('tab-login').style.display = t==='login'?'':'none';
+      document.getElementById('tab-register').style.display = t==='register'?'':'none';
+      document.querySelectorAll('.auth-tab').forEach((el,i)=>{
+        el.classList.toggle('active', (i===0&&t==='login')||(i===1&&t==='register'));
+      });
+    }
+
+    async function doLogin() {
+      const username = document.getElementById('login-user').value.trim();
+      const password = document.getElementById('login-pass').value;
+      
+      if (!username || !password) { showToast('⚠️ Vui lòng nhập đủ thông tin!', 'error'); return; }
+
+      try {
+        let { data: foundUsers, error } = await supabaseClient
+          .from('users')
+          .select('*')
+          .eq('username', username)
+          .eq('password', password);
+
+        if (error) throw error;
+
+        if (!foundUsers || foundUsers.length === 0) {
+          showToast('❌ Sai tài khoản hoặc mật khẩu hệ thống!', 'error');
+          return;
+        }
+        
+        loginAs(foundUsers[0]);
+      } catch(e) {
+        showToast('❌ Lỗi hệ thống xác thực!', 'error');
+      }
+    }
+
+    async function doRegister() {
+      const name = document.getElementById('reg-name').value.trim();
+      const username = document.getElementById('reg-user').value.trim();
+      const password = document.getElementById('reg-pass').value;
+      const role = document.getElementById('reg-role').value;
+      
+      if(!name || !username || !password) { showToast('⚠️ Vui lòng điền đầy đủ!', 'error'); return; }
+      
+      try {
+        let { data: existing } = await supabaseClient.from('users').select('id').eq('username', username);
+        if (existing && existing.length > 0) {
+          showToast('❌ Tên đăng nhập này đã tồn tại trên hệ thống!', 'error');
+          return;
+        }
+
+        let { data: newUser, error } = await supabaseClient
+          .from('users')
+          .insert([{ username, password, name, role }])
+          .select();
+
+        if (error) throw error;
+
+        showToast('✅ Đăng ký tài khoản đồng bộ thành công!', 'success');
+        setTimeout(() => loginAs(newUser[0]), 800);
+      } catch(e) {
+        showToast('❌ Không thể đăng ký tài khoản!', 'error');
+      }
+    }
+
+    function loginAs(u) {
+      currentUser = u;
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app').classList.add('visible');
+      document.getElementById('welcome-name').textContent = 'Xin chào, ' + u.name + '! 👋';
+      document.getElementById('header-username').textContent = u.name;
+      document.getElementById('header-role').textContent = u.role==='admin' ? 'Quản trị viên' : 'Sinh viên';
+      document.getElementById('user-avatar-badge').textContent = u.name.charAt(0).toUpperCase();
+      document.getElementById('user-avatar-badge').style.background = u.role==='admin' ? 'var(--accent)' : 'var(--success)';
+      
+      if(u.role==='admin') {
+        document.getElementById('nav-admin').style.display='';
+        document.getElementById('nav-manage-users').style.display='';
+      } else {
+        document.getElementById('nav-admin').style.display='none';
+        document.getElementById('nav-manage-users').style.display='none';
+      }
+      setTab('home');
+      loadData();
+    }
+
+    function doLogout() {
+      currentUser = null;
+      document.getElementById('app').classList.remove('visible');
+      document.getElementById('auth-screen').style.display='';
+      document.getElementById('login-user').value='';
+      document.getElementById('login-pass').value='';
+      switchTab('login');
+    }
+
+    // ===== 3. ĐIỀU HƯỚNG TAB =====
+    function setTab(name) {
+      ['home','content','admin','users'].forEach(t=>{
+        const element = document.getElementById('tab-content-'+t);
+        if (element) element.style.display = t===name?'':'none';
+      });
+      document.querySelectorAll('.nav-item').forEach(el=>{ el.classList.remove('active'); });
+      const items = document.querySelectorAll('.nav-item');
+      if(name=='home') items[0].classList.add('active');
+      if(name=='content') items[1].classList.add('active');
+      if(name=='admin' && currentUser?.role==='admin') { items[2].classList.add('active'); renderAdminPosts(); }
+      if(name=='users' && currentUser?.role==='admin') { items[3].classList.add('active'); renderUsersTable(); }
+    }
+
+    // ===== XỬ LÝ GIAO DIỆN CHỌN FILE =====
+    function toggleUploadUI() {
+      const t = document.getElementById('post-type').value;
+      document.getElementById('upload-area').style.display = t==='article' ? 'none' : '';
+      document.getElementById('upload-icon').textContent = t==='video' ? '🎬' : '🖼️';
+      document.getElementById('upload-label').textContent = t==='video' ? 'Nhấn để chọn video học tập' : 'Nhấn để chọn hình ảnh';
+      document.getElementById('file-input').accept = t==='video' ? 'video/*' : 'image/*';
+      document.getElementById('img-preview').style.display='none';
+    }
+
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if(!file) return;
+      if(file.size > 52428800) { showToast('❌ File vượt giới hạn 50MB hệ thống cho phép!','error'); e.target.value=''; return; }
+      
+      if(document.getElementById('post-type').value === 'image') {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const p = document.getElementById('img-preview');
+          p.src = ev.target.result; p.style.display='block';
+        };
+        reader.readAsDataURL(file);
+      }
+      document.getElementById('upload-label').textContent = '✅ ' + file.name;
+    }
+
+    // ===== 4. ĐĂNG BÀI ĐỒNG BỘ LÊN CLOUD STORAGE & DATABASE =====
+    async function submitPost() {
+      const title = document.getElementById('post-title').value.trim();
+      const desc = document.getElementById('post-desc').value.trim();
+      const type = document.getElementById('post-type').value;
+      const fileInput = document.getElementById('file-input');
+
+      if(!title) { showToast('⚠️ Vui lòng điền tiêu đề!','error'); return; }
+      if(type!=='article' && !fileInput.files[0]) { showToast('⚠️ Vui lòng chọn tệp học liệu!','error'); return; }
+
+      try {
+        showToast('⏳ Đang tải và đồng bộ học liệu lên đám mây...', '');
+        
+        let fileUrl = null;
+        let filePath = null;
+
+        if (type !== 'article' && fileInput.files[0]) {
+          const file = fileInput.files[0];
+          const fileExt = file.name.split('.').pop();
+          filePath = `uploads/${Date.now()}.${fileExt}`;
+
+          let { error: uploadError } = await supabaseClient.storage
+            .from('elearning')
+            .upload(filePath, file);
+
+          if (uploadError) throw uploadError;
+
+          const { data: publicData } = supabaseClient.storage
+            .from('elearning')
+            .getPublicUrl(filePath);
+            
+          fileUrl = publicData.publicUrl;
+        }
+
+        const dateStr = new Date().toLocaleDateString('vi-VN');
+        let { error: insertError } = await supabaseClient
+          .from('posts')
+          .insert([{
+            title,
+            desc,
+            type,
+            author: currentUser.name,
+            date: dateStr,
+            file_url: fileUrl,
+            file_path: filePath
+          }]);
+
+        if (insertError) throw insertError;
+
+        clearForm();
+        await loadData();
+        showToast('✅ Đăng bài và đồng bộ thành công!', 'success');
+      } catch(e) {
+        showToast('❌ Đăng bài thất bại, lỗi kết nối Supabase!', 'error');
+      }
+    }
+
+    // ===== 5. XÓA BÀI ĐĂNG TRÊN TOÀN HỆ THỐNG =====
+    async function deletePost(id) {
+      if(!confirm('Xóa bài đăng này sẽ đồng bộ mất trên tất cả thiết bị của học viên?')) return;
+      try {
+        const postToDelete = posts.find(p => p.id === id);
+        
+        if (postToDelete && postToDelete.file_path) {
+          await supabaseClient.storage.from('elearning').remove([postToDelete.file_path]);
+        }
+
+        let { error } = await supabaseClient.from('posts').delete().eq('id', id);
+        if (error) throw error;
+
+        await loadData();
+        showToast('🗑️ Đã gỡ nội dung khỏi toàn bộ hệ thống.', 'success');
+      } catch(e) {
+        showToast('❌ Không thể xóa nội dung học tập!', 'error');
+      }
+    }
+
+    function clearForm() {
+      document.getElementById('post-title').value='';
+      document.getElementById('post-desc').value='';
+      document.getElementById('post-type').value='article';
+      document.getElementById('file-input').value='';
+      document.getElementById('img-preview').style.display='none';
+      document.getElementById('upload-label').textContent='Nhấn để chọn file';
+      document.getElementById('upload-area').style.display='none';
+    }
+
+    // ===== HIỂN THỊ THÀNH PHẦN (RENDERING) =====
+    function updateStats() {
+      document.getElementById('stat-posts').textContent = posts.length;
+      document.getElementById('stat-videos').textContent = posts.filter(p=>p.type==='video').length;
+      document.getElementById('stat-images').textContent = posts.filter(p=>p.type==='image').length;
+      document.getElementById('stat-online').textContent = Math.floor(Math.random()*6) + 5;
+    }
+
+    function makeCard(post, showDelete=false) {
+      const badgeClass = {video:'badge-video', image:'badge-image', article:'badge-article'}[post.type];
+      const badgeLabel = {video:'🎬 Video', image:'🖼️ Hình ảnh', article:'📄 Bài viết'}[post.type];
+      
+      let mediaHTML = '';
+      if(post.type==='image' && post.file_url) {
+        mediaHTML = `<img src="${post.file_url}" alt="${post.title}" loading="lazy">`;
+      } else if(post.type==='video' && post.file_url) {
+        mediaHTML = `<video src="${post.file_url}" muted></video>`;
+      } else {
+        const icons = {article:'📄', image:'🖼️', video:'🎬'};
+        mediaHTML = `<div class="media-placeholder">${icons[post.type]||'📁'}</div>`;
+      }
+      
+      const delBtn = showDelete ? `<button class="btn-sm btn-del" onclick="deletePost(${post.id})">🗑️ Xóa</button>` : '';
+      const dlBtn = post.file_url ? `<button class="btn-sm btn-download" onclick="downloadPost('${post.file_url}')">⬇️ Tải</button>` : '';
+      
+      return `
+        <div class="content-card">
+          <div class="card-media">${mediaHTML}<span class="card-type-badge ${badgeClass}">${badgeLabel}</span></div>
+          <div class="card-body">
+            <div>
+              <div class="card-title">${post.title}</div>
+              ${post.desc ? `<div class="card-desc">${post.desc.slice(0,80)}${post.desc.length>80?'...':''}</div>` : ''}
+            </div>
+            <div class="card-meta">
+              <span class="card-date">📅 ${post.date || ''} <br> ✍️ ${post.author}</span>
+              <div class="card-actions">
+                <button class="btn-sm btn-view" onclick="viewPost(${post.id})">👁️ Xem</button>
+                ${dlBtn}${delBtn}
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderFeed() {
+      const el = document.getElementById('home-feed');
+      if(!posts.length) {
+        el.innerHTML='<div class="empty-state" style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-muted);"><div style="font-size:2rem;">📭</div><p>Chưa có tài liệu trực tuyến nào được tải lên.</p></div>';
+        return;
+      }
+      el.innerHTML = posts.slice(0,6).map(p=>makeCard(p)).join('');
+    }
+
+    document.getElementById('file-input').addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    function renderContentGrid(filter='all') {
+      const el = document.getElementById('all-content-grid');
+      const filtered = filter==='all' ? posts : posts.filter(p=>p.type===filter);
+      if(!filtered.length) {
+        el.innerHTML='<div class="empty-state" style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-muted);"><div style="font-size:2rem;">📭</div><p>Không tìm thấy nội dung thuộc danh mục này.</p></div>';
+        return;
+      }
+      el.innerHTML = filtered.map(p=>makeCard(p)).join('');
+    }
+
+    function filterContent(type, btn) {
+      currentFilter = type;
+      document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderContentGrid(type);
+    }
+
+    function renderAdminPosts() {
+      if(currentUser?.role!=='admin') return;
+      const el = document.getElementById('admin-posts-grid');
+      if(!posts.length) {
+        el.innerHTML='<div class="empty-state" style="grid-column:1/-1;color:var(--text-muted);text-align:center;padding:20px;"><p>Danh sách bài đăng của bạn trống.</p></div>';
+        return;
+      }
+      el.innerHTML = posts.map(p=>makeCard(p, true)).join('');
+    }
+
+    // ===== 6. QUẢN LÝ DANH SÁCH SINH VIÊN ĐỒNG BỘ =====
+    async function renderUsersTable() {
+      try {
+        let { data: supabaseUsers, error } = await supabaseClient.from('users').select('*').order('id', { ascending: true });
+        if (error) throw error;
+        
+        users = supabaseUsers || [];
+        const tb = document.getElementById('users-tbody');
+        tb.innerHTML = users.map((u,i)=>`
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:12px 14px;">${i+1}</td>
+            <td style="padding:12px 14px; font-weight:600;">${u.username}</td>
+            <td style="padding:12px 14px;">${u.name}</td>
+            <td style="padding:12px 14px;">
+              <span style="padding:3px 10px; border-radius:20px; font-size:0.75rem; font-weight:700;
+                background:${u.role==='admin'?'#fff4cc':'#e8f5ee'}; color:${u.role==='admin'?'#b37400':'#0d6e3e'};">
+                ${u.role==='admin'?'👑 Admin':'👤 Học viên'}
+              </span>
+            </td>
+            <td style="padding:12px 14px;">
+              ${u.id !== currentUser?.id ? `<button class="btn-sm btn-del" onclick="deleteUser(${u.id})">🗑️ Xóa</button>` : '<span style="color:var(--text-muted);font-size:0.78rem;">(Bạn)</span>'}
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        showToast('❌ Không thể đồng bộ danh sách tài khoản!', 'error');
+      }
+    }
+
+    async function deleteUser(id) {
+      if(!confirm('Bạn chắc chắn muốn xóa tài khoản này khỏi hệ thống cơ sở dữ liệu?')) return;
+      try {
+        let { error } = await supabaseClient.from('users').delete().eq('id', id);
+        if (error) throw error;
+        renderUsersTable();
+        showToast('🗑️ Đã xóa tài khoản thành công.', 'success');
+      } catch(e) {
+        showToast('❌ Thao tác xóa thất bại!', 'error');
+      }
+    }
+
+    // ===== XEM VÀ KHỞI CHẠY TẢI FILE =====
+    function viewPost(id) {
+      const p = posts.find(x=>x.id===id);
+      if(!p) return;
+      document.getElementById('modal-title').textContent = p.title;
+      let body = '';
+      if(p.type==='image' && p.file_url) {
+        body += `<img src="${p.file_url}" alt="${p.title}">`;
+      } else if(p.type==='video' && p.file_url) {
+        body += `<video src="${p.file_url}" controls autoplay style="width:100%;border-radius:10px;max-height:400px;background:#000;"></video>`;
+      }
+      body += `<h3 style="margin-top:16px;" id="modal-title">${p.title}</h3>`;
+      if(p.desc) body += `<p style="margin-top:8px; line-height:1.5; color:#334155;">${p.desc}</p>`;
+      body += `<p style="margin-top:12px; font-size:0.78rem; color:var(--text-muted);">📅 ${p.date || ''} · ✍️ ${p.author}</p>`;
+      if(p.file_url) {
+        body += `<button class="btn-primary" style="margin-top:16px; background:var(--success);" onclick="downloadPost('${p.file_url}')">⬇️ Tải xuống học liệu gốc</button>`;
+      }
+      document.getElementById('modal-body').innerHTML = body;
+      document.getElementById('modal-overlay').classList.add('open');
+    }
+
+    function downloadPost(url) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.click();
+      showToast('⬇️ Đang kết nối máy chủ Cloud tải file...', 'success');
+    }
+
+    function closeModal() { 
+      const video = document.querySelector('.modal-body video');
+      if(video) video.pause();
+      document.getElementById('modal-overlay').classList.remove('open'); 
+    }
+    function closeModalOutside(e) { if(e.target===document.getElementById('modal-overlay')) closeModal(); }
+
+    function showToast(msg, type='') {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.className = 'toast show ' + type;
+      setTimeout(()=>t.classList.remove('show'), 3000);
+    }
+  </script>
+</body>
+</html>
